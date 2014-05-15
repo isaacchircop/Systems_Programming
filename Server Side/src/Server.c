@@ -7,9 +7,14 @@
 #include <errno.h>
 #include <unistd.h>
 
+typedef struct packet packet;
+
 int main(void) {
 
 	// Create a new Socket
+
+
+	printf ("Creating Socket ... \n");
 
 	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -22,26 +27,17 @@ int main(void) {
 
 	}
 
-	printf("Socket created...\n");
-
-
-
-
 	// Bind a server address to a socket
 
-	// Create new socket address
+	printf ("Binding Address ... \n");
 
 	struct sockaddr_in serverAddr;
 
-	// Fill memory space with zeros
 	bzero(&serverAddr, sizeof(serverAddr));
 
-	// Define protocol family
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_addr.s_addr = INADDR_ANY;
-
-	// Define port number
-	serverAddr.sin_port = htons(8080); //Port Number less than 1024 requires super user access
+	serverAddr.sin_port = htons(5000);
 
 	int bindErr = bind(socketfd, (struct sockaddr*) &serverAddr, sizeof(serverAddr));
 
@@ -54,15 +50,12 @@ int main(void) {
 
 	}
 
-	printf ("Server address bound to socket...\n");
-
-
-
+	printf ("Binding Successful ... \n");
 
 	// Create a listen connection - 5 represents number of clients in queue
 	// awaiting accept from server
 
-	int listenErr = listen(socketfd, 5);
+	int listenErr = listen(socketfd, 2);
 
 	if (listenErr < 0) {
 
@@ -76,14 +69,12 @@ int main(void) {
 	printf ("Listening to connections...\n");
 
 
-
-
 	// Accepting a connection from a client
 
 	// Create a new client address variable
 
 	struct sockaddr_in clientAddr;
-	int addressLength = sizeof(struct sockaddr_in);
+	unsigned int addressLength = sizeof(struct sockaddr_in);
 
 	// Accept Connections from client address
 
@@ -99,52 +90,43 @@ int main(void) {
 
 	printf ("Accepted Connection...\n");
 
+	// Read requests sent by client
 
+	const int pathnameSize = sizeof(char) * 1024;
+	char *pathname = (char *)malloc(pathnameSize);
+	off_t offset;
 
+	read(newSocket, pathname, pathnameSize);
+	read(newSocket, &offset, sizeof(offset));
 
-	// New Socket created for successfully connected client
+	FILE *fp = fopen(pathname, "r");
 
-	// Read messages sent by client
+	if (fp == NULL) {
 
-	char* message = malloc(sizeof(char) * 1024);
-
-	printf ("Commencement of Receiving process...\n");
-
-	while (recv(newSocket, message, strlen(message), 0) > 0) {
-
-		// Output received data
-		printf ("entered loop...\n");
-
-		printf ("SERVER: %s", message);
+		printf("Error opening file %s\n", pathname);
+		exit(-1);
 
 	}
 
-	free(message);
+	// Read Contents of file into packet
 
-	printf ("End of Receiving process...\n");
+	fseek (fp, 0, SEEK_END);
+	int size = ftell(fp);
+	rewind(fp);
 
-	int closeNewSocket = close(newSocket);
-	int closeInitSocket = close(socketfd);
+	char *data = (char *)malloc (size);
+	fread(data, size, 1, fp);
 
-	if (closeNewSocket < 0) {
+	write(newSocket, (int *)&size, sizeof(int));
+	write(newSocket, data, size);
 
-		// Error Returned
+	printf ("Closing Down");
 
-		printf("%s", strerror(closeNewSocket));
-		return -1;
+	fclose(fp);
+	free(pathname);
 
-	}
-
-	if (closeInitSocket < 0) {
-
-		// Error Returned
-
-		printf("%s", strerror(closeInitSocket));
-		return -1;
-
-	}
-
-	printf ("Sockets Closed...");
+	close (newSocket);
+	close (socketfd);
 
 	return 0;
 

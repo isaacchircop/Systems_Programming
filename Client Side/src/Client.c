@@ -7,43 +7,21 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <unistd.h>
+#include "fmmap.h"
 
 int main(void) {
 
-	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+	struct in_addr address;
+	address.s_addr = inet_addr("127.0.0.1");
 
-	// Bind socket to an address
+	fileloc_t file;
+	file.ipaddress = address;
+	file.pathname = "/home/isaac/Test.txt";
+	file.port = htons(5000);
 
-	struct sockaddr_in address;
+	char* memoryMap = rmmap(file, 0);
 
-	// Describe address properties
-
-	address.sin_family = AF_INET;
-	address.sin_port = htons(8080);
-	address.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-	// Connect to socket using above described address
-
-	int res = connect(socketfd, (struct sockaddr *) &address, sizeof(address));
-
-	if (res < 0) {
-
-		// ERROR
-
-		printf("%s\n", strerror(res));
-		return -1;
-
-	}
-
-	// Send a message to the server
-
-	char* message = "This is a message from the client.";
-
-	send(socketfd, message, strlen(message), 0);
-
-
-
-	close(socketfd);
+	printf ("Data Received: %s", memoryMap);
 
 	return 0;
 
