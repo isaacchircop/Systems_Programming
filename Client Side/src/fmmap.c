@@ -62,32 +62,42 @@ void *rmmap(fileloc_t location, off_t offset)
 	if (connSucc < 0) {
 		printf ("Error Establishing Server Connection");
 		exit(-1);
+
 	}
 
 	printf ("Successfully Connected!\n");
 
-    // Connection Established.  Send request to server.
+	// Connection Established.  Send request to server.
 
 	printf ("Sending request to server...\n");
 
-	printf ("%d", (int)strlen(location.pathname));
+	int w1 = write (socketfd, (off_t *)&offset, sizeof(offset));
+	int w2 = write (socketfd, location.pathname, strlen(location.pathname));
 
-	write (socketfd, location.pathname, strlen(location.pathname));
-	write (socketfd, (off_t *)&offset, sizeof(offset));
+	// Should be decided from protocol
 
-	// Read packet of data from server
+	int numOfChars = 100;
 
-	int size;
-	read (socketfd, &size, sizeof(size));
+	char *data = (char *)malloc(sizeof(char) * numOfChars);
+	char *buf = (char *)malloc(sizeof(char) * numOfChars);
 
-	printf ("Read size...\n");
+	while (read(socketfd, buf, numOfChars) > 0) {
 
-	char *memoryMap = (char *)malloc(size);
-	read (socketfd, memoryMap, size);
+		// Successful Read from Server
 
-	printf ("Before return");
+		if (strlen(data) + strlen(buf) > sizeof(data)) {
 
-	return memoryMap;
+			data = realloc(data, sizeof(data) + numOfChars);
+
+		}
+
+		strcat (data, buf);
+
+	}
+
+	free (buf);
+
+	return data;
 
 }
 /*

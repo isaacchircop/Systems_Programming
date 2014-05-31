@@ -16,7 +16,7 @@ int main(void) {
 
 	fileloc_t file;
 	file.ipaddress = address;
-	file.pathname = "/home/isaac/Test.txt";
+	file.pathname = "/home/isaac/Test.txt";		//20bytes
 	file.port = htons(5000);
 
 	char* memoryMap = rmmap(file, 0);

@@ -90,40 +90,38 @@ int main(void) {
 
 	printf ("Accepted Connection...\n");
 
-	// Read requests sent by client
-
-	const int pathnameSize = sizeof(char) * 1024;
-	char *pathname = (char *)malloc(pathnameSize);
 	off_t offset;
+	int r1 = read(newSocket, &offset, sizeof(offset));
 
-	read(newSocket, pathname, pathnameSize);
-	read(newSocket, &offset, sizeof(offset));
+	char *pathname = (char *)malloc(sizeof(char) * 1024);		//Max Pathname accepted is 1024 characters long
+	int r2 = read(newSocket, pathname, sizeof(char)*1024);
 
 	FILE *fp = fopen(pathname, "r");
 
 	if (fp == NULL) {
 
-		printf("Error opening file %s\n", pathname);
+		printf ("Exiting");
 		exit(-1);
 
 	}
 
-	// Read Contents of file into packet
+	free (pathname);
 
-	fseek (fp, 0, SEEK_END);
-	int size = ftell(fp);
-	rewind(fp);
+	// Should be decided from protocol
+	int numOfChars = 100;											// Number of characters to be read at once
 
-	char *data = (char *)malloc (size);
-	fread(data, size, 1, fp);
+	char *buf = (char *)malloc(sizeof(char) * numOfChars);
 
-	write(newSocket, (int *)&size, sizeof(int));
-	write(newSocket, data, size);
+	while (fgets(buf, numOfChars, fp) != NULL) {
 
-	printf ("Closing Down");
+		// Successful Read from file - Send to client
+
+		int w1 = write(newSocket, buf, numOfChars);
+
+	}
 
 	fclose(fp);
-	free(pathname);
+	free(buf);
 
 	close (newSocket);
 	close (socketfd);
