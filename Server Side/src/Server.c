@@ -6,33 +6,27 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <unistd.h>
+#include <signal.h>
 
 typedef struct packet packet;
 
 int main(void) {
 
-	// Create a new Socket
-
-
-	printf ("Creating Socket ... \n");
+	pid_t pid;
 
 	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
-
 	if (socketfd < 0) {
 
 		// Error Returned
-
 		printf("%s", strerror(socketfd));
 		return -1;
 
 	}
 
 	// Bind a server address to a socket
-
 	printf ("Binding Address ... \n");
 
 	struct sockaddr_in serverAddr;
-
 	bzero(&serverAddr, sizeof(serverAddr));
 
 	serverAddr.sin_family = AF_INET;
@@ -40,7 +34,6 @@ int main(void) {
 	serverAddr.sin_port = htons(5000);
 
 	int bindErr = bind(socketfd, (struct sockaddr*) &serverAddr, sizeof(serverAddr));
-
 	if (bindErr < 0) {
 
 		// Error Returned
@@ -52,78 +45,128 @@ int main(void) {
 
 	printf ("Binding Successful ... \n");
 
-	// Create a listen connection - 5 represents number of clients in queue
-	// awaiting accept from server
+	// Listening for connections
 
 	int listenErr = listen(socketfd, 2);
-
 	if (listenErr < 0) {
 
 		// Error Returned
-
 		printf("%s", strerror(listenErr));
 		return -1;
 
 	}
 
-	printf ("Listening to connections...\n");
-
-
-	// Accepting a connection from a client
-
 	// Create a new client address variable
-
 	struct sockaddr_in clientAddr;
 	unsigned int addressLength = sizeof(struct sockaddr_in);
 
-	// Accept Connections from client address
+	int newSocket;
 
-	int newSocket = accept(socketfd, (struct sockaddr*) &clientAddr, &addressLength);
+	do {
 
-	if (newSocket < 0) {
+		// Accept Connections from client address
+		newSocket = accept(socketfd, (struct sockaddr*) &clientAddr, &addressLength);
 
-		// Error Returned
+		if (newSocket < 0) {
 
-		printf("%s", strerror(newSocket));
+			// Error Returned
+			printf("%s", strerror(newSocket));
+			exit(-1);
+
+		}
+
+		// Create new process:	Child Process handles client requests
+		//						Parent Process handles other connections
+
+		pid = fork();
+
+	} while (pid > 0);
+
+	if (pid == 0) {
+
+		// Child Process is created whenever clients connects to server - requests for rmmap
+
+		printf ("Accepted Connection...\n");
+
+		// Tackling rmmap request
+
+		off_t offset;
+		int r1 = read(newSocket, &offset, sizeof(offset));
+
+		char *pathname = (char *)malloc(sizeof(char) * 1024);		//Max Pathname accepted is 1024 characters long
+		int r2 = read(newSocket, pathname, sizeof(char)*1024);
+
+		FILE *fp = fopen(pathname, "r");
+
+		if (fp == NULL) {
+
+			printf ("Exiting\n");
+			exit(-1);
+
+		}
+
+		free (pathname);
+
+		// Should be decided from protocol
+		int numOfChars = 100;											// Number of characters to be read at once
+
+		char *buf = (char *)malloc(sizeof(char) * numOfChars);
+
+		fseek(fp, offset, SEEK_SET);
+
+		while (fgets(buf, numOfChars, fp) != NULL) {
+
+			// Successful Read from file - Send to client
+
+			int w1 = write(newSocket, buf, numOfChars);
+
+		}
+
+		char *eof = "-1";
+
+		write (newSocket, eof, sizeof(eof));
+
+		fclose(fp);
+		free(buf);
+
+		// End of rmmap tackling
+
+		int request = 0;
+
+		do {
+
+			// Read client requests
+
+			read (newSocket, &request, sizeof(request));
+
+			switch (request) {
+
+			case 1:
+				printf ("rmunmap\n");
+				close (newSocket);
+				break;
+
+			case 2:
+				printf ("write\n");
+				break;
+
+			case 3:
+				printf ("read\n");
+				break;
+
+			}
+
+		} while (request != 1);
+
+		kill(getpid(), SIGTERM);
+
+	} else if (pid < 0) {
+
+		// Error forking
+		return -1;
 
 	}
 
-	printf ("Accepted Connection...\n");
-
-	off_t offset;
-	int r1 = read(newSocket, &offset, sizeof(offset));
-
-	char *pathname = (char *)malloc(sizeof(char) * 1024);		//Max Pathname accepted is 1024 characters long
-	int r2 = read(newSocket, pathname, sizeof(char)*1024);
-
-	FILE *fp = fopen(pathname, "r");
-
-	if (fp == NULL) {
-
-		printf ("Exiting");
-		exit(-1);
-
-	}
-
-	free (pathname);
-
-	// Should be decided from protocol
-	int numOfChars = 100;											// Number of characters to be read at once
-
-	char *buf = (char *)malloc(sizeof(char) * numOfChars);
-
-	while (fgets(buf, numOfChars, fp) != NULL) {
-
-		// Successful Read from file - Send to client
-
-		int w1 = write(newSocket, buf, numOfChars);
-
-	}
-
-	fclose(fp);
-	free(buf);
-
-	close (newSocket);
 	close (socketfd);
 
 	return 0;

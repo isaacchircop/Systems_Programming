@@ -34,19 +34,11 @@ void error(char *msg)
 int socketfd;
 struct sockaddr_in serverAddr;
 
-// Packet of data structure
-struct packet {
-
-	int type;
-	char* data;
-	int length;
-
-};
-typedef struct packet packet;
-
 // Memory map remote file
 void *rmmap(fileloc_t location, off_t offset)
 {
+
+	void *MAPFAILED = (void*)-1;
 
 	printf ("Connecting to Server...\n");
 
@@ -61,7 +53,7 @@ void *rmmap(fileloc_t location, off_t offset)
 
 	if (connSucc < 0) {
 		printf ("Error Establishing Server Connection");
-		exit(-1);
+		return MAPFAILED;
 
 	}
 
@@ -77,11 +69,12 @@ void *rmmap(fileloc_t location, off_t offset)
 	// Should be decided from protocol
 
 	int numOfChars = 100;
+	char *eof = "-1";
 
 	char *data = (char *)malloc(sizeof(char) * numOfChars);
 	char *buf = (char *)malloc(sizeof(char) * numOfChars);
 
-	while (read(socketfd, buf, numOfChars) > 0) {
+	while (read(socketfd, buf, numOfChars) > 0  && *buf != *eof) {
 
 		// Successful Read from Server
 
@@ -100,51 +93,35 @@ void *rmmap(fileloc_t location, off_t offset)
 	return data;
 
 }
-/*
 int rmunmap(void *addr)
 {
 
-	return munmap(addr,length);
+	int request = 1;
+	write (socketfd, &request, sizeof(request));
 
-	int value;
+	free (addr);
+	return close (socketfd);
 
-    if((value = munmap(addr, length)) == 0)
-    {
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
 }
 
 ssize_t mread(void *addr, off_t offset, void *buff, size_t count)
 {
-    int value;
 
-    if((value = read((addr + offset),buff,count)) == 0)
-    {
-        return count;
-    }
-    else
-    {
-        return -1;
-    }
+	int request = 3;
+	write (socketfd, &request, sizeof(request));
+
+	return 0;
+
 }
 
 ssize_t mwrite(void *addr, off_t offset, void *buff, size_t count)
 {
-    int value;
 
-    if((value = write(addr + offset,buff,count)) == 0)
-    {
-        return count;
-    }
-    else
-    {
-        return -1;
-    }
+	int request = 2;
+	write (socketfd, &request, sizeof(request));
 
-}*/
+	return 0;
+
+}
 
 #endif
