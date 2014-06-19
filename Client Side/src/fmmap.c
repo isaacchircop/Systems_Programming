@@ -107,20 +107,49 @@ int rmunmap(void *addr)
 ssize_t mread(void *addr, off_t offset, void *buff, size_t count)
 {
 
-	int request = 3;
-	write (socketfd, &request, sizeof(request));
+	memcpy (buff, addr+offset, count);
 
-	return 0;
+	return count;
 
 }
 
 ssize_t mwrite(void *addr, off_t offset, void *buff, size_t count)
 {
 
-	int request = 2;
-	write (socketfd, &request, sizeof(request));
+	int mapSize = strlen((char *)addr);
 
-	return 0;
+	if ((offset <= 0) || (offset > mapSize)) {
+
+		return 0;
+
+	}
+
+	// Reallocating addr if necessary
+
+	// If last address - offset is smaller than expected no. of bytes to be written reallocate.
+
+	/*
+	if (((addr + mapSize) - (addr + offset)) < count) {
+
+		printf ("Prev Size %d\n", (int)sizeof(addr));
+		addr = realloc(addr, sizeof(addr) + count);
+		printf ("New Size %d\n", (int)sizeof(addr));
+
+	}
+
+	*/
+
+	int i = 0;
+
+	int size = count / sizeof(char);
+
+	for (i = 0; i < size; i++) {
+
+		((char *)addr)[offset + i] = ((char *)buff)[i];
+
+	}
+
+	return i;
 
 }
 

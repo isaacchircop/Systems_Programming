@@ -19,15 +19,20 @@ int main(void) {
 	file.pathname = "/home/isaac/Test.txt";		//20bytes
 	file.port = htons(5000);
 
-	char* memoryMap = rmmap(file, 5);
+	char* memoryMap = rmmap(file, 0);
 	printf ("Mapped Data: \n%s", memoryMap);
 
 	char *buf = (char *)malloc(sizeof(char));
-	int y = mwrite(memoryMap, 0, buf, 10);
-	int z = mread(memoryMap, 0, buf, 10);
+	int z = mread(memoryMap, 0, buf, 5);
+
+	printf ("Read Data: \n%s\n", buf);
+
+	buf = "12345678901234567890";
+	int y = mwrite(memoryMap, 8, buf, strlen(buf));
+
+	printf ("Mapped Data: \n%s\n", memoryMap);
 
 	int x = rmunmap(memoryMap);
-	printf ("Mapped Data: \n%s", memoryMap);
 
 	return 0;
 

@@ -150,10 +150,6 @@ int main(void) {
 				printf ("write\n");
 				break;
 
-			case 3:
-				printf ("read\n");
-				break;
-
 			}
 
 		} while (request != 1);
