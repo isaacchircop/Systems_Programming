@@ -27,7 +27,7 @@ int main(void) {
 
 	printf ("Read Data: \n%s\n", buf);
 
-	buf = "12345678901234567890";
+	buf = ":(";
 	int y = mwrite(memoryMap, 8, buf, strlen(buf));
 
 	printf ("Mapped Data: \n%s\n", memoryMap);

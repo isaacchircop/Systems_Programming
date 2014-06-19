@@ -15,6 +15,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 // Type definition for remote file location
 struct fileloc {
@@ -52,7 +53,7 @@ void *rmmap(fileloc_t location, off_t offset)
 	int connSucc = connect(socketfd, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
 
 	if (connSucc < 0) {
-		printf ("Error Establishing Server Connection");
+		printf("%s\n", strerror(errno));
 		return MAPFAILED;
 
 	}
@@ -63,8 +64,8 @@ void *rmmap(fileloc_t location, off_t offset)
 
 	printf ("Sending request to server...\n");
 
-	int w1 = write (socketfd, (off_t *)&offset, sizeof(offset));
-	int w2 = write (socketfd, location.pathname, strlen(location.pathname));
+	write (socketfd, (off_t *)&offset, sizeof(offset));
+	write (socketfd, location.pathname, strlen(location.pathname));
 
 	// Should be decided from protocol
 
@@ -116,6 +117,11 @@ ssize_t mread(void *addr, off_t offset, void *buff, size_t count)
 ssize_t mwrite(void *addr, off_t offset, void *buff, size_t count)
 {
 
+	int request = 2;
+	write (socketfd, &request, sizeof(request));
+
+	// Update Local Version
+
 	int mapSize = strlen((char *)addr);
 
 	if ((offset <= 0) || (offset > mapSize)) {
@@ -148,6 +154,12 @@ ssize_t mwrite(void *addr, off_t offset, void *buff, size_t count)
 		((char *)addr)[offset + i] = ((char *)buff)[i];
 
 	}
+
+	// Update Server Version
+
+	write (socketfd, (off_t *)&offset, sizeof(offset));
+	write (socketfd, (int *)&count, sizeof(int));
+	write (socketfd, buff, count);
 
 	return i;
 

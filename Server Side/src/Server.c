@@ -3,12 +3,12 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
-
-typedef struct packet packet;
+#include <fcntl.h>
 
 int main(void) {
 
@@ -17,8 +17,7 @@ int main(void) {
 	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (socketfd < 0) {
 
-		// Error Returned
-		printf("%s", strerror(socketfd));
+		printf("%s\n", strerror(errno));
 		return -1;
 
 	}
@@ -36,9 +35,7 @@ int main(void) {
 	int bindErr = bind(socketfd, (struct sockaddr*) &serverAddr, sizeof(serverAddr));
 	if (bindErr < 0) {
 
-		// Error Returned
-
-		printf("%s", strerror(bindErr));
+		printf("%s\n", strerror(errno));
 		return -1;
 
 	}
@@ -50,8 +47,7 @@ int main(void) {
 	int listenErr = listen(socketfd, 2);
 	if (listenErr < 0) {
 
-		// Error Returned
-		printf("%s", strerror(listenErr));
+		printf("%s\n", strerror(errno));
 		return -1;
 
 	}
@@ -69,8 +65,7 @@ int main(void) {
 
 		if (newSocket < 0) {
 
-			// Error Returned
-			printf("%s", strerror(newSocket));
+			printf("%s\n", strerror(errno));
 			exit(-1);
 
 		}
@@ -91,34 +86,30 @@ int main(void) {
 		// Tackling rmmap request
 
 		off_t offset;
-		int r1 = read(newSocket, &offset, sizeof(offset));
+		read(newSocket, &offset, sizeof(offset));
 
 		char *pathname = (char *)malloc(sizeof(char) * 1024);		//Max Pathname accepted is 1024 characters long
-		int r2 = read(newSocket, pathname, sizeof(char)*1024);
+		read(newSocket, pathname, sizeof(char)*1024);
 
-		FILE *fp = fopen(pathname, "r");
+		int fd = open(pathname, O_RDONLY);
+		if (fd < 0) {
 
-		if (fp == NULL) {
-
-			printf ("Exiting\n");
+			printf("%s\n", strerror(errno));
 			exit(-1);
 
 		}
-
-		free (pathname);
 
 		// Should be decided from protocol
 		int numOfChars = 100;											// Number of characters to be read at once
 
 		char *buf = (char *)malloc(sizeof(char) * numOfChars);
 
-		fseek(fp, offset, SEEK_SET);
+		lseek (fd, offset, SEEK_SET);
 
-		while (fgets(buf, numOfChars, fp) != NULL) {
+		while (read (fd, buf, numOfChars) > 0) {
 
 			// Successful Read from file - Send to client
-
-			int w1 = write(newSocket, buf, numOfChars);
+			write(newSocket, buf, numOfChars);
 
 		}
 
@@ -126,7 +117,7 @@ int main(void) {
 
 		write (newSocket, eof, sizeof(eof));
 
-		fclose(fp);
+		close (fd);
 		free(buf);
 
 		// End of rmmap tackling
@@ -142,12 +133,36 @@ int main(void) {
 			switch (request) {
 
 			case 1:
-				printf ("rmunmap\n");
+				printf ("Closing Connection for client...\n");
 				close (newSocket);
 				break;
 
 			case 2:
-				printf ("write\n");
+
+				fd = open(pathname, O_WRONLY);
+
+				if (fd < 0) {
+
+					printf("%s", strerror(errno));
+					exit(-1);
+
+				}
+
+				off_t offset;
+				read(newSocket, &offset, sizeof(offset));
+
+				lseek (fd, offset, SEEK_SET);
+
+				int count;
+				read(newSocket, (int *)&count, sizeof(int));
+
+				char *buff = (char *)malloc(sizeof(char) * count);		//Max Pathname accepted is 1024 characters long
+				read(newSocket, buff, sizeof(char)*count);
+
+				write (fd, buff, count);
+
+				close(fd);
+
 				break;
 
 			}
