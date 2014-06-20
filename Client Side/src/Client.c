@@ -22,6 +22,9 @@ int main(void) {
 	char* memoryMap = rmmap(file, 0);
 	printf ("Mapped Data: \n%s", memoryMap);
 
+	char ch;
+	scanf("%c",&ch);
+
 	char *buf = (char *)malloc(sizeof(char));
 	int z = mread(memoryMap, 0, buf, 5);
 

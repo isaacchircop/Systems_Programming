@@ -9,6 +9,9 @@
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
+#include <sys/mman.h>
 
 int main(void) {
 
@@ -91,11 +94,23 @@ int main(void) {
 		char *pathname = (char *)malloc(sizeof(char) * 1024);		//Max Pathname accepted is 1024 characters long
 		read(newSocket, pathname, sizeof(char)*1024);
 
-		int fd = open(pathname, O_RDONLY);
+		int fd = open(pathname, O_RDWR);
 		if (fd < 0) {
 
 			printf("%s\n", strerror(errno));
 			exit(-1);
+
+		}
+
+		size_t fileSize = lseek(fd, 0, SEEK_END);
+
+		char *memSeg = (char *)malloc(fileSize);
+
+		memSeg = mmap(memSeg, fileSize, PROT_WRITE, MAP_SHARED, fd, offset);
+
+		if (memSeg == (void *)-1) {
+
+			printf("%s\n", strerror(errno));
 
 		}
 
@@ -132,38 +147,32 @@ int main(void) {
 
 			switch (request) {
 
-			case 1:
-				printf ("Closing Connection for client...\n");
-				close (newSocket);
-				break;
+				case 1:
 
-			case 2:
+					printf ("Closing Connection for client...\n");
+					munmap (memSeg, sizeof(memSeg));
+					free (memSeg);
+					close (newSocket);
+					break;
 
-				fd = open(pathname, O_WRONLY);
+				case 2: {
 
-				if (fd < 0) {
+					off_t offset;
+					read(newSocket, &offset, sizeof(offset));
 
-					printf("%s", strerror(errno));
-					exit(-1);
+					int count;
+					read(newSocket, (int *)&count, sizeof(int));
+
+					char *buff = (char *)malloc(sizeof(char) * count);
+					read(newSocket, buff, sizeof(char)*count);
+
+					memcpy (memSeg + offset, buff, count);
+
+					free (buff);
+
+					break;
 
 				}
-
-				off_t offset;
-				read(newSocket, &offset, sizeof(offset));
-
-				lseek (fd, offset, SEEK_SET);
-
-				int count;
-				read(newSocket, (int *)&count, sizeof(int));
-
-				char *buff = (char *)malloc(sizeof(char) * count);		//Max Pathname accepted is 1024 characters long
-				read(newSocket, buff, sizeof(char)*count);
-
-				write (fd, buff, count);
-
-				close(fd);
-
-				break;
 
 			}
 
