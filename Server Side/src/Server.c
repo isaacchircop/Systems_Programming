@@ -12,8 +12,26 @@
 #include <sys/shm.h>
 #include <sys/ipc.h>
 #include <sys/mman.h>
+#include <semaphore.h>
+
+
 
 int main(void) {
+
+	// Create and Initialize Semaphore
+
+	sem_t binarysem;
+
+	int binary_semapore_id = sem_init(&binarysem,1,1);
+
+	if(binary_semapore_id < 0){
+
+		printf("%s\n", strerror(errno));
+		exit(-1);
+
+	}
+
+	// Set Up Listen Port for client connection
 
 	pid_t pid;
 
@@ -157,18 +175,43 @@ int main(void) {
 
 				case 2: {
 
-					off_t offset;
-					read(newSocket, &offset, sizeof(offset));
+					// Lock shared memory
 
-					int count;
-					read(newSocket, (int *)&count, sizeof(int));
+					int allocatesem = sem_wait(&binarysem);
 
-					char *buff = (char *)malloc(sizeof(char) * count);
-					read(newSocket, buff, sizeof(char)*count);
+					if(allocatesem < 0){
 
-					memcpy (memSeg + offset, buff, count);
+						printf("%s\n", strerror(errno));
 
-					free (buff);
+					} else {
+
+						// On successful lock perform write
+
+						off_t offset;
+						read(newSocket, &offset, sizeof(offset));
+
+						int count;
+						read(newSocket, (int *)&count, sizeof(int));
+
+						char *buff = (char *)malloc(sizeof(char) * count);
+						read(newSocket, buff, sizeof(char)*count);
+
+						memcpy (memSeg + offset, buff, count);
+
+						free (buff);
+
+						// Unlock semaphore
+
+						int deallocatesem = sem_post(&binarysem);
+
+						if(deallocatesem < 0){
+
+							printf("%s\n", strerror(errno));
+							exit(-1);
+
+						}
+
+					}
 
 					break;
 
