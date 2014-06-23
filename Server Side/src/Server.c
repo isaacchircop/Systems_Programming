@@ -13,23 +13,17 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <semaphore.h>
+#include <signal.h>
 
+struct response {
 
+	int number;
+	char message[25];
+
+};
+typedef struct response rsp;
 
 int main(void) {
-
-	// Create and Initialize Semaphore
-
-	sem_t binarysem;
-
-	int binary_semapore_id = sem_init(&binarysem,1,1);
-
-	if(binary_semapore_id < 0){
-
-		printf("%s\n", strerror(errno));
-		exit(-1);
-
-	}
 
 	// Set Up Listen Port for client connection
 
@@ -44,8 +38,6 @@ int main(void) {
 	}
 
 	// Bind a server address to a socket
-	printf ("Binding Address ... \n");
-
 	struct sockaddr_in serverAddr;
 	bzero(&serverAddr, sizeof(serverAddr));
 
@@ -61,9 +53,9 @@ int main(void) {
 
 	}
 
-	printf ("Binding Successful ... \n");
-
 	// Listening for connections
+
+	printf ("Listening for connections ... \n");
 
 	int listenErr = listen(socketfd, 2);
 	if (listenErr < 0) {
@@ -102,16 +94,19 @@ int main(void) {
 
 		// Child Process is created whenever clients connects to server - requests for rmmap
 
-		printf ("Accepted Connection...\n");
+		printf ("\nAccepted Connection from client %d ... \n", getpid());
 
-		// Tackling rmmap request
+		// **** Start of rmmap ****
 
+		// Get file offset to start mapping from
 		off_t offset;
 		read(newSocket, &offset, sizeof(offset));
 
+		// Get Pathname of file from where we are to map
 		char *pathname = (char *)malloc(sizeof(char) * 1024);		//Max Pathname accepted is 1024 characters long
 		read(newSocket, pathname, sizeof(char)*1024);
 
+		// Try Opening File
 		int fd = open(pathname, O_RDWR);
 		if (fd < 0) {
 
@@ -120,46 +115,38 @@ int main(void) {
 
 		}
 
-		size_t fileSize = lseek(fd, 0, SEEK_END);
-
-		char *memSeg = (char *)malloc(fileSize);
-
-		memSeg = mmap(memSeg, fileSize, PROT_WRITE, MAP_SHARED, fd, offset);
-
-		if (memSeg == (void *)-1) {
-
-			printf("%s\n", strerror(errno));
-
-		}
-
 		// Should be decided from protocol
 		int numOfChars = 100;											// Number of characters to be read at once
 
 		char *buf = (char *)malloc(sizeof(char) * numOfChars);
 
+		// Seek offset and start reading from file
 		lseek (fd, offset, SEEK_SET);
 
 		while (read (fd, buf, numOfChars) > 0) {
 
-			// Successful Read from file - Send to client
+			// Send read data to client
 			write(newSocket, buf, numOfChars);
 
 		}
 
+		// Should be decided from protocol
 		char *eof = "-1";
 
+		// Inform client of end of mapping
 		write (newSocket, eof, sizeof(eof));
 
+		// Free any open buffers and close file descriptor
 		close (fd);
 		free(buf);
 
-		// End of rmmap tackling
+		// **** End of rmmap tackling ****
 
 		int request = 0;
 
-		do {
+		// Accept client requests until memory is unmapped
 
-			// Read client requests
+		do {
 
 			read (newSocket, &request, sizeof(request));
 
@@ -167,51 +154,104 @@ int main(void) {
 
 				case 1:
 
-					printf ("Closing Connection for client...\n");
-					munmap (memSeg, sizeof(memSeg));
-					free (memSeg);
+					// Unmap and close connection
+
+					printf ("Closing Connection with client %d...\n", getpid());
 					close (newSocket);
+					kill (getpid(), 0);		// Perform Suicide
 					break;
 
 				case 2: {
 
-					// Lock shared memory
+					// **** Start of write request handling ****
 
-					int allocatesem = sem_wait(&binarysem);
+					rsp resp;
+					char *message;
 
-					if(allocatesem < 0){
+					// Get details of Write Request
+					off_t write_offset;
+					read(newSocket, &write_offset, sizeof(write_offset));
+
+					int count;
+					read(newSocket, (int *)&count, sizeof(int));
+
+					char *buff = (char *)malloc(sizeof(char) * count);
+					read(newSocket, buff, sizeof(char)*count);
+
+					// Open file with Write Access
+					int fd = open(pathname, O_WRONLY);
+					if (fd < 0) {
 
 						printf("%s\n", strerror(errno));
 
-					} else {
+						resp.number = -1;
+						message = "Could Not Open File";
+						strcpy (resp.message, message);
 
-						// On successful lock perform write
+						write (newSocket, &resp, sizeof(resp));
 
-						off_t offset;
-						read(newSocket, &offset, sizeof(offset));
-
-						int count;
-						read(newSocket, (int *)&count, sizeof(int));
-
-						char *buff = (char *)malloc(sizeof(char) * count);
-						read(newSocket, buff, sizeof(char)*count);
-
-						memcpy (memSeg + offset, buff, count);
-
-						free (buff);
-
-						// Unlock semaphore
-
-						int deallocatesem = sem_post(&binarysem);
-
-						if(deallocatesem < 0){
-
-							printf("%s\n", strerror(errno));
-							exit(-1);
-
-						}
+						break;
 
 					}
+
+					// ** File Lock Handling **
+
+					struct flock savelock, unlock;
+
+					savelock.l_type = F_WRLCK;
+					savelock.l_whence = SEEK_SET;
+					savelock.l_start = offset + write_offset;
+					savelock.l_len = count;
+
+					unlock.l_type = F_UNLCK;
+					unlock.l_whence = SEEK_SET;
+					unlock.l_start = offset + write_offset;
+					unlock.l_len = count;
+
+					// Lock file segment that will be modified
+					int x = fcntl (fd, F_SETLK, &savelock);
+
+					if (x == -1) {
+
+						resp.number = -1;
+						message = "File is locked";
+						strcpy (resp.message, message);
+
+						write (newSocket, &resp, sizeof(resp));
+
+					}
+
+					// Perform write
+					lseek (fd, offset + write_offset, SEEK_SET);
+					int bytes = write (fd, buff, count);
+
+					char c;
+					scanf ("%c", &c);
+
+					// Unlock file segment that was modified
+					int y = fcntl (fd, F_SETLK, &unlock);
+
+					if (y == -1) {
+
+						resp.number = -1;
+						message = "Could not unlock file";
+						strcpy (resp.message, message);
+
+						write (newSocket, &resp, sizeof(resp));
+
+					} else {
+
+						resp.number = bytes;
+						message = "Success";
+						strcpy (resp.message, message);
+
+						write (newSocket, &resp, sizeof(resp));
+
+					}
+
+					// Free buffer and close file descriptor
+					free (buff);
+					close (fd);
 
 					break;
 

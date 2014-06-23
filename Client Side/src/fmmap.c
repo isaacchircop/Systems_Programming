@@ -17,13 +17,20 @@
 #include <string.h>
 #include <errno.h>
 
-// Type definition for remote file location
 struct fileloc {
     struct in_addr ipaddress; // Remote IP
     int port;                 // Remote port
     char *pathname;           // Remote file to be memory mapped
 };
 typedef struct fileloc fileloc_t;
+
+struct response {
+
+	int number;
+	char message[25];
+
+};
+typedef struct response rsp;
 
 void error(char *msg)
 {
@@ -41,8 +48,6 @@ void *rmmap(fileloc_t location, off_t offset)
 
 	void *MAPFAILED = (void*)-1;
 
-	printf ("Connecting to Server...\n");
-
 	// Creating socket and binding server address to it
 
 	socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -58,11 +63,9 @@ void *rmmap(fileloc_t location, off_t offset)
 
 	}
 
-	printf ("Successfully Connected!\n");
+	printf ("Connection Established!\n");
 
 	// Connection Established.  Send request to server.
-
-	printf ("Sending request to server...\n");
 
 	write (socketfd, (off_t *)&offset, sizeof(offset));
 	write (socketfd, location.pathname, strlen(location.pathname));
@@ -91,6 +94,8 @@ void *rmmap(fileloc_t location, off_t offset)
 
 	free (buf);
 
+	printf ("Memory map Successful\n");
+
 	return data;
 
 }
@@ -117,51 +122,46 @@ ssize_t mread(void *addr, off_t offset, void *buff, size_t count)
 ssize_t mwrite(void *addr, off_t offset, void *buff, size_t count)
 {
 
+	// Send Request to server
 	int request = 2;
 	write (socketfd, &request, sizeof(request));
 
-	// Update Local Version
-
+	// Check that offset is valid
 	int mapSize = strlen((char *)addr);
+	if ((offset < 0) || (offset > mapSize)) {
 
-	if ((offset <= 0) || (offset > mapSize)) {
+		printf ("Invalid Offset");
+		return -1;
 
-		return 0;
+	} else {
+
+		// **** Try Updating File On Server ****
+
+		// Send Write Details
+		write (socketfd, (off_t *)&offset, sizeof(offset));
+		write (socketfd, (int *)&count, sizeof(int));
+		write (socketfd, buff, count);
+
+		// Get Server Response about write
+		rsp resp;
+		read (socketfd, &resp, sizeof(resp));
+
+		if (resp.number == -1) {
+
+			// Error
+			printf ("%s\n", resp.message);
+			return -1;
+
+		} else {
+
+			// Update Local Version
+
+			memcpy (addr + offset, buff, count);
+			return count;
+
+		}
 
 	}
-
-	// Reallocating addr if necessary
-
-	// If last address - offset is smaller than expected no. of bytes to be written reallocate.
-
-	/*
-	if (((addr + mapSize) - (addr + offset)) < count) {
-
-		printf ("Prev Size %d\n", (int)sizeof(addr));
-		addr = realloc(addr, sizeof(addr) + count);
-		printf ("New Size %d\n", (int)sizeof(addr));
-
-	}
-
-	*/
-
-	int i = 0;
-
-	int size = count / sizeof(char);
-
-	for (i = 0; i < size; i++) {
-
-		((char *)addr)[offset + i] = ((char *)buff)[i];
-
-	}
-
-	// Update Server Version
-
-	write (socketfd, (off_t *)&offset, sizeof(offset));
-	write (socketfd, (int *)&count, sizeof(int));
-	write (socketfd, buff, count);
-
-	return i;
 
 }
 

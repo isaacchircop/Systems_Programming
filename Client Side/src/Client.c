@@ -20,22 +20,18 @@ int main(void) {
 	file.port = htons(5000);
 
 	char* memoryMap = rmmap(file, 0);
-	printf ("Mapped Data: \n%s", memoryMap);
+	printf ("Mapped Data: \n%s\n\n", memoryMap);
 
-	char ch;
-	scanf("%c",&ch);
+	char c;
+	scanf ("%c", &c);
 
 	char *buf = (char *)malloc(sizeof(char));
-	int z = mread(memoryMap, 0, buf, 5);
+	buf = "t";
+	mwrite(memoryMap, 0, buf, strlen(buf));
 
-	printf ("Read Data: \n%s\n", buf);
+	printf ("Mapped Data: \n%s\n\n", memoryMap);
 
-	buf = ":(";
-	int y = mwrite(memoryMap, 8, buf, strlen(buf));
-
-	printf ("Mapped Data: \n%s\n", memoryMap);
-
-	int x = rmunmap(memoryMap);
+	rmunmap(memoryMap);
 
 	return 0;
 
