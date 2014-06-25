@@ -42,6 +42,9 @@ void error(char *msg)
 int socketfd;
 struct sockaddr_in serverAddr;
 
+// File Offset
+off_t fileoffset;
+
 // Memory map remote file
 void *rmmap(fileloc_t location, off_t offset)
 {
@@ -69,6 +72,8 @@ void *rmmap(fileloc_t location, off_t offset)
 
 	write (socketfd, (off_t *)&offset, sizeof(offset));
 	write (socketfd, location.pathname, strlen(location.pathname));
+
+	fileoffset = offset;
 
 	// Should be decided from protocol
 
@@ -112,6 +117,43 @@ int rmunmap(void *addr)
 
 ssize_t mread(void *addr, off_t offset, void *buff, size_t count)
 {
+
+	int succRead = 1;
+
+	while (succRead > 0) {
+
+		off_t updateOffset;
+		succRead = read (socketfd, &updateOffset, sizeof(updateOffset));
+
+		if (succRead > 0) {
+
+			// Read remaining update details
+
+			int count;
+			read (socketfd, &count, sizeof(count));
+
+			char *updatebuff = (char *)malloc(count);
+			read (socketfd, updatebuff, count);
+
+			// Update information
+
+			off_t memoryOffset = updateOffset - fileoffset;
+
+			if (memoryOffset < 0) {
+
+				// Error
+
+			} else {
+
+				memcpy (addr + memoryOffset, updatebuff, count);
+
+			}
+
+		}
+
+	}
+
+	// After update return read data
 
 	memcpy (buff, addr+offset, count);
 

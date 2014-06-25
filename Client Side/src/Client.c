@@ -25,9 +25,16 @@ int main(void) {
 	char c;
 	scanf ("%c", &c);
 
-	char *buf = (char *)malloc(sizeof(char));
-	buf = "t";
-	mwrite(memoryMap, 0, buf, strlen(buf));
+	char *buff = (char *)malloc(10);
+	mread(memoryMap, 0, buff, sizeof(buff));
+
+	scanf ("%c", &c);
+
+	char *buf = (char *)malloc(sizeof(char)*10);
+	buf = ":(";
+	mwrite(memoryMap, 8, buf, strlen(buf));
+
+
 
 	printf ("Mapped Data: \n%s\n\n", memoryMap);
 

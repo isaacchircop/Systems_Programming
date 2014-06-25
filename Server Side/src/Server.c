@@ -23,6 +23,38 @@ struct response {
 };
 typedef struct response rsp;
 
+void broadcastUpdate (void *fds) {
+
+	do {
+
+		int parentRead = ((int *)fds)[0];
+		int childRead = ((int *)fds)[1];
+
+		off_t fileOffset;
+		int offsetRead = read (parentRead, &fileOffset, sizeof(fileOffset));
+
+		if (offsetRead > 0) {
+
+			printf ("Received Update\n");
+
+			// Send update to all children
+
+			int count;
+			read (parentRead, &count, sizeof(count));
+
+			char *buff = (char *)malloc(sizeof(count));
+			read (parentRead, &buff, count);
+
+			write (childRead, &fileOffset, sizeof(fileOffset));
+			write (childRead, &count, sizeof(count));
+			write (childRead, &buff, count);
+
+		}
+
+	} while (1);
+
+}
+
 int main(void) {
 
 	// Set Up Listen Port for client connection
@@ -85,8 +117,6 @@ int main(void) {
 
 		}
 
-		// Create Pipe for parent child communication
-
 		int pipeErr = pipe(parentRead);
 
 		if(pipeErr < 0){
@@ -98,8 +128,15 @@ int main(void) {
 
 		dup2(parentRead, childRead);
 
-		// Create new process:	Child Process handles client requests
-		//						Parent Process handles other connections
+		int fds[2];
+		fds[0] = parentRead[0];
+		fds[1] = childRead[1];
+
+		// Create thread to check for child updates
+
+		pthread_t broadcastThread;
+
+		int rc = pthread_create (&broadcastThread, NULL, broadcastUpdate, (void *)fds);
 
 		pid = fork();
 
@@ -107,32 +144,6 @@ int main(void) {
 
 			close (childRead[0]);		// Close read fd for childRead pipe
 			close (parentRead[1]);		// Close write fd for parentRead pipe
-
-			fcntl (childRead[0], F_SETFL, O_NONBLOCK);
-			fcntl (parentRead[1], F_SETFL, O_NONBLOCK);
-
-			// Read any updates from children
-
-			off_t fileOffset;
-			int offsetRead = read (parentRead[0], &fileOffset, sizeof(fileOffset));
-
-			if (offsetRead > 0) {
-
-				printf ("Received Update\n");
-
-				// Send update to all children
-
-				int count;
-				read (parentRead[0], &count, sizeof(count));
-
-				char *buff = (char *)malloc(sizeof(count));
-				read (parentRead[0], &buff, count);
-
-				write (childRead[1], &fileOffset, sizeof(fileOffset));
-				write (childRead[1], &count, sizeof(count));
-				write (childRead[1], &buff, count);
-
-			}
 
 		}
 
@@ -142,11 +153,6 @@ int main(void) {
 
 		close (childRead[1]);			// Close write fd for childRead pipe
 		close (parentRead[0]);			// Close read fd for parentRead pipe
-
-		fcntl (childRead[0], F_SETFL, O_NONBLOCK);
-		fcntl (parentRead[1], F_SETFL, O_NONBLOCK);
-
-		fcntl (newSocket, F_SETFL, O_NONBLOCK);
 
 		// Child Process is created whenever clients connects to server - requests for rmmap
 
@@ -207,7 +213,7 @@ int main(void) {
 			// Check for updates from parent process
 
 			off_t fileOffset;
-			int offsetRead = read (childRead[0], &fileOffset, sizeof(fileOffset));
+			int offsetRead = recv (childRead[0], &fileOffset, sizeof(fileOffset), MSG_DONTWAIT);
 
 			if (offsetRead > 0) {
 
@@ -231,7 +237,7 @@ int main(void) {
 
 				/// Read for client requests
 
-				int clientRead = read (newSocket, &request, sizeof(request));
+				int clientRead = recv (newSocket, &request, sizeof(request), MSG_DONTWAIT);
 
 				if (clientRead > 0) {
 
